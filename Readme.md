@@ -1,62 +1,94 @@
+# Prometheus Monitoring Setup with Kubernetes
 
-`go mod init`
+This guide provides step-by-step instructions to set up a Prometheus monitoring stack on a Kubernetes cluster, deploy a sample application with metrics, and visualize the metrics using Prometheus and Grafana.
 
-`gmv`
+## Prerequisites
 
-`cobra-cli init`
+- A running Kubernetes cluster
+- `kubectl` configured to interact with the cluster
+- `helm` installed
 
-`cobra-cli add start`
+## Installation Steps
 
--> then write the business logic in exporter.go file
+### 1. Install Prometheus Stack
 
--> create dockerfile
+Add the Prometheus community Helm chart repository, update it, and install the `kube-prometheus-stack` in the `monitoring` namespace.
 
-`docker build  -t skaliarman/prometheus:latest .`
-
-`docker push skaliarman/prometheus:latest`
-
--> test
-
-`docker run --rm -it -p 8080:8080 skaliarman/prometheus:latest`
-
--> install prometheus stack
-
-```helm
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring --set grafana.image.tag=7.5.5 --create-namespace
 ```
 
-deploy a deployment, service, service monitor kept on  `./helm` directory
+This command deploys Prometheus, Grafana, and related components with Grafana version 7.5.5.
 
-`helm create prometheus-exporter`
+### 2. Verify Prometheus Pods
 
-metrics we are exposing is `http_requests_total` on '/metrics' endpoint.
+Ensure all Prometheus-related pods are running in the `monitoring` namespace.
 
-graphana user: admin
+```bash
+kubectl get pods -n monitoring
+```
 
-password: prom-operator
+Check that all pods show a `Running` status before proceeding.
 
--> port forward the deployment
+### 3. Deploy the Sample Application
 
-`kubectl port-forward service/prometheus-exporter 8080:8080`
+Deploy a sample application (including a Deployment, Service, and ServiceMonitor) from the `./helm` directory. The application exposes a metric named `http_requests_total` on the `/metrics` endpoint.
 
--> visit `http://localhost:8080/hi`
+```bash
+kubectl apply -f ./helm/deploy.yaml
+```
 
--> port forward prometheus and grafana
+### 4. Test the Application
 
-`kubectl port-forward -n monitoring service/prometheus-kube-prometheus-prometheus 9090:9090`
+Port-forward the application service to access it locally.
 
-`kubectl port-forward -n monitoring service/prometheus-grafana 3000:80`
+```bash
+kubectl port-forward service/prometheus-exporter 8080:8080
+```
 
-check `http_requests_total` on prometheus
+Open a browser and visit `http://localhost:8080/hi`. Refresh the page multiple times to increment the `http_requests_total` counter.
 
+![img_2.png](img_2.png)
 
+### 5. Access Prometheus and Grafana
 
+Port-forward the Prometheus and Grafana services to access their web interfaces.
 
+#### Prometheus
+```bash
+kubectl port-forward -n monitoring service/prometheus-kube-prometheus-prometheus 9090:9090
+```
 
+Visit `http://127.0.0.1:9090` in your browser. Query the `http_requests_total` metric to verify the application's metrics are being scraped.
 
+![img.png](img.png)
+#### Grafana
+```bash
+kubectl port-forward -n monitoring service/prometheus-grafana 3000:80
+```
 
+Visit `http://127.0.0.1:3000` and log in with the following credentials:
+- **Username**: `admin`
+- **Password**: `prom-operator`
 
+### 6. Import Grafana Dashboard
+
+In Grafana, import the dashboard configuration from `./grafana/dashboard.json`:
+1. Navigate to the Grafana UI (`http://127.0.0.1:3000`).
+2. Go to **Dashboards** > **Import**.
+3. Upload the `dashboard.json` file or paste its contents.
+4. Save and view the dashboard to visualize the `http_requests_total` metrics.
+
+5. ![img_1.png](img_1.png)
+## Cleanup
+
+To remove the Prometheus stack and application:
+```bash
+helm uninstall prometheus -n monitoring
+kubectl delete -f ./helm/deploy.yaml
+kubectl delete namespace monitoring
+```
 
 
